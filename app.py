@@ -18,7 +18,7 @@ def parse_dt(dt_str):
         return None
     dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
     mt = pytz.timezone("America/Denver")
-    return dt.astimezone(mt)
+    return dt.astimezone(mt)h
 
 def fmt_dt(dt):
     """Cross-platform datetime formatting without leading zeros."""
@@ -118,7 +118,7 @@ with right:
 
 st.divider()
 
-# --- NEXT 2 EVENTS AVAILABILITY DETAIL ---
+# --- NEXT 3 EVENTS AVAILABILITY DETAIL ---
 st.subheader("📋 Availability Detail")
 status_label = {1: "✅ Going", 2: "❌ Not Going", None: "❓ No Response"}
 for event in upcoming[:3]:
