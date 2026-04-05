@@ -1,0 +1,119 @@
+import streamlit as st
+import requests
+from datetime import datetime
+import pytz
+
+TOKEN = st.secrets["TEAMSNAP_TOKEN"]
+TEAM_ID = 10574989
+HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+BASE = "https://api.teamsnap.com/v3"
+
+def get_data(url):
+    r = requests.get(url, headers=HEADERS)
+    items = r.json().get("collection", {}).get("items", [])
+    return [{d["name"]: d["value"] for d in item["data"]} for item in items]
+
+def parse_dt(dt_str):
+    if not dt_str:
+        return None
+    dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+    mt = pytz.timezone("America/Denver")
+    return dt.astimezone(mt)
+
+def fmt_dt(dt):
+    """Cross-platform datetime formatting without leading zeros."""
+    return dt.strftime(f"%a %b {dt.day}, %Y · {dt.hour % 12 or 12}:{dt.strftime('%M')} {'AM' if dt.hour < 12 else 'PM'}")
+
+def fmt_time(dt):
+    return f"{dt.hour % 12 or 12}:{dt.strftime('%M')} {'AM' if dt.hour < 12 else 'PM'}"
+
+st.set_page_config(page_title="2013 Girls (Harman) Dashboard", page_icon="⚽", layout="wide")
+st.title("⚽ 2013 Girls (Harman) — Team Dashboard")
+st.caption("New Frontier Soccer · U13 Formation Phase · Season 2026")
+
+# --- LOAD DATA ---
+with st.spinner("Loading team data..."):
+    members = get_data(f"{BASE}/members/search?team_id={TEAM_ID}")
+    events = get_data(f"{BASE}/events/search?team_id={TEAM_ID}")
+    availabilities = get_data(f"{BASE}/availabilities/search?team_id={TEAM_ID}")
+
+players = [m for m in members if not m.get("is_non_player")]
+staff = [m for m in members if m.get("is_non_player")]
+
+now = datetime.now(pytz.timezone("America/Denver"))
+upcoming = sorted(
+    [e for e in events if e.get("start_date") and parse_dt(e["start_date"]) >= now],
+    key=lambda e: parse_dt(e["start_date"])
+)
+past = sorted(
+    [e for e in events if e.get("start_date") and parse_dt(e["start_date"]) < now],
+    key=lambda e: parse_dt(e["start_date"]), reverse=True
+)
+
+# --- TOP METRICS ---
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("👧 Players", len(players))
+col2.metric("📅 Upcoming Events", len(upcoming))
+col3.metric("✅ Events Completed", len(past))
+col4.metric("🏟️ Opponents", "8")
+
+st.divider()
+
+# --- UPCOMING SCHEDULE ---
+left, right = st.columns([2, 1])
+
+with left:
+    st.subheader("📅 Upcoming Schedule")
+    if not upcoming:
+        st.info("No upcoming events.")
+    for e in upcoming[:8]:
+        dt = parse_dt(e["start_date"])
+        arrive_dt = parse_dt(e.get("arrival_date") or e["start_date"])
+        label = "🎮 Game" if e.get("is_game") else "🏃 Practice" if e.get("name") == "Training" else "📌 Event"
+        canceled = " ~~CANCELED~~" if e.get("is_canceled") else ""
+        with st.expander(f"{label} — {fmt_dt(dt)} — {e.get('name', '')}{canceled}"):
+            st.write(f"**Location:** {e.get('location_name', 'TBD')}")
+            if e.get("additional_location_details"):
+                st.write(f"**Field:** {e['additional_location_details']}")
+            st.write(f"**Arrive by:** {fmt_time(arrive_dt)}")
+            st.write(f"**Duration:** {e.get('duration_in_minutes', '?')} minutes")
+            if e.get("notes"):
+                st.write(f"**Notes:** {e['notes']}")
+
+            # Availability for this event
+            event_avail = [a for a in availabilities if str(a.get("event_id")) == str(e["id"])]
+            going = [a for a in event_avail if a.get("status_code") == 1]
+            not_going = [a for a in event_avail if a.get("status_code") == 2]
+            no_response = [a for a in event_avail if not a.get("status_code")]
+            st.write(f"**Availability:** ✅ {len(going)} going · ❌ {len(not_going)} not going · ❓ {len(no_response)} no response")
+
+# --- ROSTER ---
+with right:
+    st.subheader("👧 Player Roster")
+    for p in sorted(players, key=lambda x: x.get("last_name") or ""):
+        jersey = f" #{p['jersey_number']}" if p.get("jersey_number") else ""
+        position = f" · {p['position']}" if p.get("position") else ""
+        st.write(f"**{p['first_name']} {p['last_name']}**{jersey}{position}")
+
+    st.divider()
+    st.subheader("🧑‍💼 Team Staff")
+    for s in staff:
+        role = "Owner" if s.get("is_owner") else "Manager"
+        st.write(f"{s['first_name']} {s['last_name']} · {role}")
+
+st.divider()
+
+# --- NEXT EVENT AVAILABILITY DETAIL ---
+if upcoming:
+    next_event = upcoming[0]
+    next_dt = parse_dt(next_event["start_date"])
+    st.subheader(f"📋 Availability Detail — Next Event: {next_event.get('name')} on {next_dt.strftime('%a %b')} {next_dt.day}")
+    next_avail = {str(a["member_id"]): a.get("status_code") for a in availabilities if str(a.get("event_id")) == str(next_event["id"])}
+    status_label = {1: "✅ Going", 2: "❌ Not Going", None: "❓ No Response"}
+    cols = st.columns(4)
+    for i, p in enumerate(sorted(players, key=lambda x: x.get("last_name") or "")):
+        status = next_avail.get(str(p["id"]))
+        cols[i % 4].write(f"{status_label.get(status, '❓')} {p['first_name']} {p['last_name']}")
+
+st.divider()
+st.caption(f"Last refreshed: {now.strftime('%B')} {now.day}, {now.year} at {fmt_time(now)} Mountain Time · Data from TeamSnap API")
