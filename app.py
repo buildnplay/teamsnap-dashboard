@@ -103,17 +103,18 @@ with right:
 
 st.divider()
 
-# --- NEXT EVENT AVAILABILITY DETAIL ---
-if upcoming:
-    next_event = upcoming[0]
-    next_dt = parse_dt(next_event["start_date"])
-    st.subheader(f"📋 Availability Detail — Next Event: {next_event.get('name')} on {next_dt.strftime('%a %b')} {next_dt.day}")
-    next_avail = {str(a["member_id"]): a.get("status_code") for a in availabilities if str(a.get("event_id")) == str(next_event["id"])}
-    status_label = {1: "✅ Going", 2: "❌ Not Going", None: "❓ No Response"}
-    cols = st.columns(4)
-    for i, p in enumerate(sorted(players, key=lambda x: x.get("last_name") or "")):
-        status = next_avail.get(str(p["id"]))
-        cols[i % 4].write(f"{status_label.get(status, '❓')} {p['first_name']} {p['last_name']}")
+# --- NEXT 2 EVENTS AVAILABILITY DETAIL ---
+st.subheader("📋 Availability Detail")
+status_label = {1: "✅ Going", 2: "❌ Not Going", None: "❓ No Response"}
+for event in upcoming[:2]:
+    event_dt = parse_dt(event["start_date"])
+    label = "🎮 Game" if event.get("is_game") else "🏃 Practice" if event.get("name") == "Training" else "📌 Event"
+    with st.expander(f"{label} — {event.get('name')} · {event_dt.strftime('%a %b')} {event_dt.day}", expanded=True):
+        event_avail = {str(a["member_id"]): a.get("status_code") for a in availabilities if str(a.get("event_id")) == str(event["id"])}
+        cols = st.columns(4)
+        for i, p in enumerate(sorted(players, key=lambda x: x.get("last_name") or "")):
+            status = event_avail.get(str(p["id"]))
+            cols[i % 4].write(f"{status_label.get(status, '❓')} {p['first_name']} {p['last_name']}")
 
 st.divider()
 st.caption(f"Last refreshed: {now.strftime('%B')} {now.day}, {now.year} at {fmt_time(now)} Mountain Time · Data from TeamSnap API")
