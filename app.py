@@ -18,7 +18,7 @@ def parse_dt(dt_str):
         return None
     dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
     mt = pytz.timezone("America/Denver")
-    return dt.astimezone(mt)h
+    return dt.astimezone(mt)
 
 def fmt_dt(dt):
     """Cross-platform datetime formatting without leading zeros."""
