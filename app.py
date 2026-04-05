@@ -28,6 +28,21 @@ def fmt_time(dt):
     return f"{dt.hour % 12 or 12}:{dt.strftime('%M')} {'AM' if dt.hour < 12 else 'PM'}"
 
 st.set_page_config(page_title="2013 Girls (Harman) Dashboard", page_icon="⚽", layout="wide")
+
+# --- PASSCODE GATE ---
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.title("⚽ 2013 Girls (Harman) — Team Dashboard")
+    code = st.text_input("Enter passcode to view the dashboard:", type="password")
+    if code == st.secrets["DASHBOARD_PASSCODE"]:
+        st.session_state.authenticated = True
+        st.rerun()
+    elif code:
+        st.error("Incorrect passcode.")
+    st.stop()
+
 st.title("⚽ 2013 Girls (Harman) — Team Dashboard")
 st.caption("New Frontier Soccer · U13 Formation Phase · Season 2026")
 
