@@ -121,7 +121,7 @@ st.divider()
 # --- NEXT 2 EVENTS AVAILABILITY DETAIL ---
 st.subheader("📋 Availability Detail")
 status_label = {1: "✅ Going", 2: "❌ Not Going", None: "❓ No Response"}
-for event in upcoming[:2]:
+for event in upcoming[:3]:
     event_dt = parse_dt(event["start_date"])
     label = "🎮 Game" if event.get("is_game") else "🏃 Practice" if event.get("name") == "Training" else "📌 Event"
     with st.expander(f"{label} — {event.get('name')} · {event_dt.strftime('%a %b')} {event_dt.day}", expanded=True):
