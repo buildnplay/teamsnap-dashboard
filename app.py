@@ -106,7 +106,7 @@ with left:
             going = [a for a in event_avail if a.get("status_code") == 1]
             not_going = [a for a in event_avail if a.get("status_code") == 2]
             no_response = [a for a in event_avail if not a.get("status_code")]
-            st.write(f"**Availability:** ✅ {len(going)} going · ❌ {len(not_going)} not going · ❓ {len(no_response)} no response")
+            st.write(f"**Availability:** ✅ {len(going)} going · ❌ {len(not_going)} not going · ⬜ {len(no_response)} no response")
 
 # --- ROSTER ---
 with right:
@@ -126,7 +126,7 @@ st.divider()
 
 # --- NEXT 3 EVENTS AVAILABILITY DETAIL ---
 st.subheader("📋 Availability Detail")
-status_label = {1: "✅ Going", 2: "❌ Not Going", None: "❓ No Response"}
+status_label = {1: "✅ Going", 2: "❌ Not Going", None: "⬜ No Response"}
 for event in upcoming[:3]:
     event_dt = parse_dt(event["start_date"])
     label = "🎮 Game" if event.get("is_game") else "🏃 Practice" if event.get("name") == "Training" else "📌 Event"
@@ -135,7 +135,7 @@ for event in upcoming[:3]:
         cols = st.columns(4)
         for i, p in enumerate(sorted(players, key=lambda x: x.get("last_name") or "")):
             status = event_avail.get(str(p["id"]))
-            cols[i % 4].write(f"{status_label.get(status, '❓')} {p['first_name']} {p['last_name']}")
+            cols[i % 4].write(f"{status_label.get(status, '⬜')} {p['first_name']} {p['last_name']}")
 
 st.divider()
 
