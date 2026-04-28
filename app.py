@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import json
 import os
-import altair as alt
 from datetime import datetime
 import pytz
 
@@ -162,21 +161,12 @@ if player_totals:
         name = f"{p.get('first_name', '?')} {p.get('last_name', '')}"
         lboard_cols[i % 5].metric(name, f"{total} ⚽")
 
-    chart_data = [
-        {"Player": f"{player_map.get(mid, {}).get('first_name', '?')} {player_map.get(mid, {}).get('last_name', '')}".strip(), "Goals": total}
-        for mid, total in sorted_scorers
+    st.markdown("**Season Goal Scorers**")
+    table_data = [
+        {"#": i + 1, "Player": f"{player_map.get(mid, {}).get('first_name', '?')} {player_map.get(mid, {}).get('last_name', '')}".strip(), "Goals": total}
+        for i, (mid, total) in enumerate(sorted_scorers)
     ]
-    chart = (
-        alt.Chart(alt.Data(values=chart_data))
-        .mark_bar(color="#4CAF50")
-        .encode(
-            x=alt.X("Goals:Q", axis=alt.Axis(tickMinStep=1), title="Goals"),
-            y=alt.Y("Player:N", sort="-x", title=""),
-            tooltip=["Player:N", "Goals:Q"],
-        )
-        .properties(height=max(120, len(chart_data) * 40), title="Season Goal Scorers")
-    )
-    st.altair_chart(chart, use_container_width=True)
+    st.table(table_data)
 else:
     st.info("No goals recorded yet for this season.")
 
