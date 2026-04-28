@@ -51,9 +51,11 @@ with st.spinner("Loading team data..."):
     members = get_data(f"{BASE}/members/search?team_id={TEAM_ID}")
     events = get_data(f"{BASE}/events/search?team_id={TEAM_ID}")
     availabilities = get_data(f"{BASE}/availabilities/search?team_id={TEAM_ID}")
+    opponents = get_data(f"{BASE}/opponents/search?team_id={TEAM_ID}")
 
 players = [m for m in members if not m.get("is_non_player")]
 staff = [m for m in members if m.get("is_non_player")]
+opponent_map = {str(o["id"]): o.get("name", "Unknown") for o in opponents}
 
 now = datetime.now(pytz.timezone("America/Denver"))
 upcoming = sorted(
@@ -70,7 +72,7 @@ col1, col2, col3, col4 = st.columns(4)
 col1.metric("👧 Players", len(players))
 col2.metric("📅 Upcoming Events", len(upcoming))
 col3.metric("✅ Events Completed", len(past))
-col4.metric("🏟️ Opponents", "8")
+col4.metric("🏟️ Opponents", len(opponents))
 
 st.divider()
 
@@ -84,9 +86,13 @@ with left:
     for e in upcoming[:8]:
         dt = parse_dt(e["start_date"])
         arrive_dt = parse_dt(e.get("arrival_date") or e["start_date"])
+        opponent_name = opponent_map.get(str(e.get("opponent_id")), "") if e.get("opponent_id") else ""
         label = "🎮 Game" if e.get("is_game") else "🏃 Practice" if e.get("name") == "Training" else "📌 Event"
+        title_suffix = f" vs {opponent_name}" if opponent_name else f" — {e.get('name', '')}"
         canceled = " ~~CANCELED~~" if e.get("is_canceled") else ""
-        with st.expander(f"{label} — {fmt_dt(dt)} — {e.get('name', '')}{canceled}"):
+        with st.expander(f"{label}{title_suffix}{canceled} · {fmt_dt(dt)}"):
+            if opponent_name:
+                st.write(f"**Opponent:** {opponent_name}")
             st.write(f"**Location:** {e.get('location_name', 'TBD')}")
             if e.get("additional_location_details"):
                 st.write(f"**Field:** {e['additional_location_details']}")
@@ -165,7 +171,11 @@ if not games:
     st.info("No completed games found to record goals for.")
 else:
     with st.expander("📝 Record Goals for a Game", expanded=False):
-        game_options = {f"{fmt_dt(parse_dt(g['start_date']))} — {g.get('name', 'Game')}": g for g in games}
+        def game_label(g):
+            opp = opponent_map.get(str(g.get("opponent_id")), "") if g.get("opponent_id") else ""
+            suffix = f"vs {opp}" if opp else g.get("name", "Game")
+            return f"{fmt_dt(parse_dt(g['start_date']))} — {suffix}"
+        game_options = {game_label(g): g for g in games}
         selected_label = st.selectbox("Select game", list(game_options.keys()))
         selected_game = game_options[selected_label]
         game_id = str(selected_game["id"])
