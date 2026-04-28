@@ -1,25 +1,30 @@
 import streamlit as st
 import requests
+import json
+import os
 from datetime import datetime
 import pytz
 
 TOKEN = st.secrets["TEAMSNAP_TOKEN"]
 TEAM_ID = 10574989
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
-CJSON_HEADERS = {**HEADERS, "Content-Type": "application/vnd.collection+json"}
 BASE = "https://api.teamsnap.com/v3"
+GOALS_FILE = os.path.join(os.path.dirname(__file__), "goals.json")
 
 def get_data(url):
     r = requests.get(url, headers=HEADERS)
     items = r.json().get("collection", {}).get("items", [])
     return [{d["name"]: d["value"] for d in item["data"]} for item in items]
 
-def post_data(url, fields: dict):
-    payload = {"collection": {"template": {"data": [{"name": k, "value": v} for k, v in fields.items()]}}}
-    return requests.post(url, headers=CJSON_HEADERS, json=payload)
+def load_goals() -> dict:
+    if not os.path.exists(GOALS_FILE):
+        return {}
+    with open(GOALS_FILE) as f:
+        return json.load(f)
 
-def delete_data(url):
-    return requests.delete(url, headers=HEADERS)
+def save_goals(data: dict):
+    with open(GOALS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 def parse_dt(dt_str):
     if not dt_str:
@@ -129,102 +134,59 @@ for event in upcoming[:3]:
 st.divider()
 
 # --- GOAL TRACKER ---
+# Goals stored locally in goals.json as {event_id: {member_id: goals}}
 st.subheader("⚽ Goal Tracker")
 
-stat_defs = get_data(f"{BASE}/stat_defs/search?team_id={TEAM_ID}")
-goals_def = next((s for s in stat_defs if s.get("name", "").lower() == "goals"), None)
+all_goals = load_goals()  # {event_id: {member_id: int}}
+player_map = {str(p["id"]): p for p in players}
 
-if not goals_def:
-    st.warning("No 'Goals' stat definition found for this team.")
-    if st.button("Create 'Goals' stat definition"):
-        r = post_data(f"{BASE}/stat_defs", {"team_id": TEAM_ID, "name": "Goals", "type": "integer", "sequence": 1})
-        if r.ok:
-            st.success("Created! Refresh the page to continue.")
-        else:
-            st.error(f"Error: {r.status_code} — {r.text}")
+# --- LEADERBOARD ---
+player_totals: dict[str, int] = {}
+for game_goals in all_goals.values():
+    for mid, g in game_goals.items():
+        player_totals[mid] = player_totals.get(mid, 0) + g
+
+if player_totals:
+    st.markdown("**Season Goals Leaderboard**")
+    sorted_scorers = sorted(player_totals.items(), key=lambda x: x[1], reverse=True)
+    lboard_cols = st.columns(min(len(sorted_scorers), 5))
+    for i, (mid, total) in enumerate(sorted_scorers):
+        p = player_map.get(mid, {})
+        name = f"{p.get('first_name', '?')} {p.get('last_name', '')}"
+        lboard_cols[i % 5].metric(name, f"{total} ⚽")
 else:
-    stat_entries = get_data(f"{BASE}/stat_entries/search?team_id={TEAM_ID}")
+    st.info("No goals recorded yet for this season.")
 
-    # --- LEADERBOARD ---
-    goals_def_id = str(goals_def["id"])
-    goal_entries = [e for e in stat_entries if str(e.get("stat_def_id")) == goals_def_id]
-    player_goals: dict[str, int] = {}
-    for e in goal_entries:
-        mid = str(e.get("member_id"))
-        player_goals[mid] = player_goals.get(mid, 0) + int(e.get("value") or 0)
+st.divider()
 
-    if player_goals:
-        st.markdown("**Season Goals Leaderboard**")
-        player_map = {str(p["id"]): p for p in players}
-        sorted_scorers = sorted(player_goals.items(), key=lambda x: x[1], reverse=True)
-        lboard_cols = st.columns(min(len(sorted_scorers), 5))
-        for i, (mid, total) in enumerate(sorted_scorers):
-            p = player_map.get(mid, {})
-            name = f"{p.get('first_name', '?')} {p.get('last_name', '')}"
-            lboard_cols[i % 5].metric(name, f"{total} ⚽")
-    else:
-        st.info("No goals recorded yet for this season.")
+# --- RECORD GOALS FORM ---
+games = [e for e in past if e.get("is_game")]
+if not games:
+    st.info("No completed games found to record goals for.")
+else:
+    with st.expander("📝 Record Goals for a Game", expanded=False):
+        game_options = {f"{fmt_dt(parse_dt(g['start_date']))} — {g.get('name', 'Game')}": g for g in games}
+        selected_label = st.selectbox("Select game", list(game_options.keys()))
+        selected_game = game_options[selected_label]
+        game_id = str(selected_game["id"])
 
-    st.divider()
+        existing_for_game: dict[str, int] = all_goals.get(game_id, {})
 
-    # --- RECORD GOALS FORM ---
-    games = [e for e in past if e.get("is_game")]
-    if not games:
-        st.info("No completed games found to record goals for.")
-    else:
-        with st.expander("📝 Record Goals for a Game", expanded=False):
-            game_options = {f"{fmt_dt(parse_dt(g['start_date']))} — {g.get('name', 'Game')}": g for g in games}
-            selected_label = st.selectbox("Select game", list(game_options.keys()))
-            selected_game = game_options[selected_label]
-            game_id = str(selected_game["id"])
+        st.markdown("Enter goals scored (leave 0 for players who didn't score):")
+        goal_inputs: dict[str, int] = {}
+        input_cols = st.columns(3)
+        for i, p in enumerate(sorted(players, key=lambda x: x.get("last_name") or "")):
+            mid = str(p["id"])
+            name = f"{p['first_name']} {p['last_name']}"
+            goal_inputs[mid] = input_cols[i % 3].number_input(
+                name, min_value=0, max_value=20, value=existing_for_game.get(mid, 0), key=f"goals_{mid}"
+            )
 
-            existing_for_game = {
-                str(e["member_id"]): e
-                for e in goal_entries
-                if str(e.get("event_id")) == game_id
-            }
-
-            st.markdown("Enter goals scored (leave 0 for players who didn't score):")
-            goal_inputs: dict[str, int] = {}
-            input_cols = st.columns(3)
-            for i, p in enumerate(sorted(players, key=lambda x: x.get("last_name") or "")):
-                existing_val = int(existing_for_game.get(str(p["id"]), {}).get("value") or 0)
-                name = f"{p['first_name']} {p['last_name']}"
-                goal_inputs[str(p["id"])] = input_cols[i % 3].number_input(
-                    name, min_value=0, max_value=20, value=existing_val, key=f"goals_{p['id']}"
-                )
-
-            if st.button("💾 Save Goals"):
-                errors = []
-                saved = 0
-                for member_id, goals in goal_inputs.items():
-                    existing = existing_for_game.get(member_id)
-                    existing_val = int(existing.get("value") or 0) if existing else 0
-                    if existing and goals != existing_val:
-                        # update: delete old, post new (API v3 has no PATCH for stat_entries)
-                        delete_data(f"{BASE}/stat_entries/{existing['id']}")
-                        if goals > 0:
-                            r = post_data(f"{BASE}/stat_entries", {
-                                "stat_def_id": goals_def["id"], "member_id": member_id,
-                                "event_id": game_id, "value": goals,
-                            })
-                            if not r.ok:
-                                errors.append(f"member {member_id}: {r.status_code}")
-                            else:
-                                saved += 1
-                    elif not existing and goals > 0:
-                        r = post_data(f"{BASE}/stat_entries", {
-                            "stat_def_id": goals_def["id"], "member_id": member_id,
-                            "event_id": game_id, "value": goals,
-                        })
-                        if not r.ok:
-                            errors.append(f"member {member_id}: {r.status_code}")
-                        else:
-                            saved += 1
-                if errors:
-                    st.error(f"Some entries failed: {', '.join(errors)}")
-                else:
-                    st.success(f"Saved! {saved} goal record(s) updated. Refresh to see the leaderboard.")
+        if st.button("💾 Save Goals"):
+            all_goals[game_id] = {mid: g for mid, g in goal_inputs.items() if g > 0}
+            save_goals(all_goals)
+            st.success("Goals saved!")
+            st.rerun()
 
 st.divider()
 st.caption(f"Last refreshed: {now.strftime('%B')} {now.day}, {now.year} at {fmt_time(now)} Mountain Time · Data from TeamSnap API")
