@@ -165,8 +165,26 @@ else:
 
 st.divider()
 
-# --- RECORD GOALS FORM ---
+# --- PER-GAME SCORERS ---
 games = [e for e in past if e.get("is_game")]
+games_with_goals = [g for g in games if all_goals.get(str(g["id"]))]
+if games_with_goals:
+    st.markdown("**Goals by Game**")
+    for g in games_with_goals:
+        game_id = str(g["id"])
+        opp = opponent_map.get(str(g.get("opponent_id")), "") if g.get("opponent_id") else ""
+        title = f"vs {opp}" if opp else g.get("name", "Game")
+        dt = parse_dt(g["start_date"])
+        scorers = sorted(all_goals[game_id].items(), key=lambda x: x[1], reverse=True)
+        with st.expander(f"🎮 {title} · {dt.strftime('%b')} {dt.day}"):
+            for mid, n in scorers:
+                p = player_map.get(mid, {})
+                name = f"{p.get('first_name', '?')} {p.get('last_name', '')}"
+                st.write(f"⚽ {'  ·  '.join(['⚽'] * n)}  **{name}** — {n} goal{'s' if n > 1 else ''}")
+
+st.divider()
+
+# --- RECORD GOALS FORM ---
 if not games:
     st.info("No completed games found to record goals for.")
 else:
