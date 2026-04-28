@@ -180,7 +180,7 @@ if games_with_goals:
             for mid, n in scorers:
                 p = player_map.get(mid, {})
                 name = f"{p.get('first_name', '?')} {p.get('last_name', '')}"
-                st.write(f"⚽ {'  ·  '.join(['⚽'] * n)}  **{name}** — {n} goal{'s' if n > 1 else ''}")
+                st.write(f"{'⚽' * n}  **{name}** — {n} goal{'s' if n > 1 else ''}")
 
 st.divider()
 
