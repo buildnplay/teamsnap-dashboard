@@ -104,8 +104,8 @@ with left:
             # Availability for this event
             event_avail = [a for a in availabilities if str(a.get("event_id")) == str(e["id"])]
             going = [a for a in event_avail if a.get("status_code") == 1]
-            not_going = [a for a in event_avail if a.get("status_code") == 2]
-            no_response = [a for a in event_avail if not a.get("status_code")]
+            not_going = [a for a in event_avail if a.get("status_code") in (0, 2)]
+            no_response = [a for a in event_avail if a.get("status_code") is None]
             st.write(f"**Availability:** ✅ {len(going)} going · ❌ {len(not_going)} not going · ⬜ {len(no_response)} no response")
 
 # --- ROSTER ---
@@ -126,7 +126,7 @@ st.divider()
 
 # --- NEXT 3 EVENTS AVAILABILITY DETAIL ---
 st.subheader("📋 Availability Detail")
-status_label = {1: "✅ Going", 2: "❌ Not Going", None: "⬜ No Response"}
+status_label = {1: "✅ Going", 2: "❌ Not Going", 0: "❌ Not Going", None: "⬜ No Response"}
 for event in upcoming[:3]:
     event_dt = parse_dt(event["start_date"])
     label = "🎮 Game" if event.get("is_game") else "🏃 Practice" if event.get("name") == "Training" else "📌 Event"
